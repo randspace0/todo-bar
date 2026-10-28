@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::google::sync::{local_date, local_hash, remote_hash, ListOutcome};
 use crate::model::*;
 
 #[derive(Clone)]
@@ -39,7 +40,7 @@ impl Store {
     }
 
     fn empty() -> Self {
-        let ws = Workspace { id: Uuid::new_v4(), name: "Todo".into() };
+        let ws = Workspace::new("Todo");
         Self {
             all_items: vec![],
             current_workspace_id: ws.id,
@@ -150,7 +151,7 @@ impl Store {
 
     pub fn add_workspace(&mut self, name: &str) -> Uuid {
         self.record_undo();
-        let ws = Workspace { id: Uuid::new_v4(), name: name.to_string() };
+        let ws = Workspace::new(name);
         let id = ws.id;
         self.workspaces.push(ws);
         self.current_workspace_id = id;
@@ -191,6 +192,9 @@ impl Store {
         self.record_undo();
         let mut item = self.all_items.remove(index);
         item.workspace_id = Some(ws);
+        // Belongs to another Google list now: the old copy is removed there, a new one created here.
+        item.google_id = None;
+        item.google_hash = None;
         self.all_items.push(item);
         self.save();
     }
@@ -304,6 +308,77 @@ impl Store {
         self.save();
     }
 
+    // MARK: Google sync
+
+    pub fn set_google_list(&mut self, ws: Uuid, list_id: Option<String>) {
+        if let Some(w) = self.workspaces.iter_mut().find(|w| w.id == ws) {
+            w.google_list_id = list_id;
+            // Unlinking (or relinking elsewhere) forgets per-task links so nothing is deleted remotely.
+            for i in self.all_items.iter_mut().filter(|i| i.workspace_id == Some(ws)) {
+                i.google_id = None;
+                i.google_hash = None;
+            }
+            self.save();
+            self.save_workspaces();
+        }
+    }
+
+    /// Applies a finished sync. Not undoable. Pull-side changes are skipped for tasks edited since
+    /// the sync started; the next sync picks those up.
+    pub fn apply_sync(&mut self, o: &ListOutcome, now: DateTime<Utc>) {
+        if !self.workspaces.iter().any(|w| w.id == o.workspace && w.google_list_id.as_deref() == Some(o.list_id.as_str())) {
+            return;
+        }
+        for (id, gid, hash) in &o.links {
+            if let Some(i) = self.all_items.iter_mut().find(|i| i.id == *id) {
+                i.google_id = Some(gid.clone());
+                i.google_hash = Some(*hash);
+            }
+        }
+        for (id, expected, r) in &o.updates {
+            let Some(i) = self.all_items.iter_mut().find(|i| i.id == *id) else { continue };
+            if local_hash(i) != *expected {
+                continue;
+            }
+            if !r.title.trim().is_empty() {
+                i.title = r.title.trim().to_string();
+            }
+            i.notes = r.notes.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+            if r.done != i.is_done {
+                i.is_done = r.done;
+                i.completed_at = r.done.then(|| trunc(now));
+            }
+            if local_date(i) != r.date {
+                i.deadline = r.date.map(local_start_of_day);
+                i.deadline_has_time = false;
+                if r.date.is_none() {
+                    i.repeat_rule = None;
+                }
+            }
+            i.google_hash = Some(remote_hash(r));
+        }
+        for r in &o.creates {
+            if self.all_items.iter().any(|i| i.google_id.as_deref() == Some(r.id.as_str())) {
+                continue;
+            }
+            let mut i = TodoItem::new(r.title.trim().to_string());
+            i.notes = r.notes.as_deref().map(str::trim).filter(|n| !n.is_empty()).map(str::to_string);
+            i.is_done = r.done;
+            i.completed_at = r.done.then(|| trunc(now));
+            i.deadline = r.date.map(local_start_of_day);
+            i.workspace_id = Some(o.workspace);
+            i.google_id = Some(r.id.clone());
+            i.google_hash = Some(remote_hash(r));
+            self.all_items.push(i);
+        }
+        for (id, expected) in &o.deletes {
+            if self.item(*id).is_some_and(|i| local_hash(i) == *expected) {
+                self.all_items.retain(|i| i.id != *id);
+            }
+        }
+        self.save();
+    }
+
     // MARK: undo / redo
 
     pub fn undo(&mut self) {
@@ -337,7 +412,20 @@ impl Store {
         self.redo.clear();
     }
 
-    fn restore(&mut self, snap: Snapshot) {
+    fn restore(&mut self, mut snap: Snapshot) {
+        // Google link metadata is sync state, not undoable user state: keep what the live items and
+        // workspaces have, otherwise the next sync would delete and re-create tasks on Google.
+        // Items that are not live (an undone delete) come back unlinked and are re-created.
+        for item in &mut snap.items {
+            let live = self.all_items.iter().find(|i| i.id == item.id);
+            item.google_id = live.and_then(|l| l.google_id.clone());
+            item.google_hash = live.and_then(|l| l.google_hash);
+        }
+        for ws in &mut snap.workspaces {
+            if let Some(live) = self.workspaces.iter().find(|w| w.id == ws.id) {
+                ws.google_list_id = live.google_list_id.clone();
+            }
+        }
         self.all_items = snap.items;
         self.workspaces = snap.workspaces;
         self.current_workspace_id = snap.current;

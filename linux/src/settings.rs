@@ -96,6 +96,9 @@ pub struct Settings {
     pub edge: Edge,
     pub tab_y: f32,
     pub login_item_configured: bool,
+    /// Google OAuth desktop client (env TODOBAR_GOOGLE_CLIENT_ID / _SECRET override these).
+    pub google_client_id: String,
+    pub google_client_secret: String,
 }
 
 impl Default for Settings {
@@ -112,6 +115,8 @@ impl Default for Settings {
             edge: Edge::Right,
             tab_y: 20.0,
             login_item_configured: false,
+            google_client_id: String::new(),
+            google_client_secret: String::new(),
         }
     }
 }

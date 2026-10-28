@@ -1,6 +1,7 @@
 mod anim;
 mod autostart;
 mod cmd;
+mod google;
 mod model;
 mod reminders;
 mod settings;

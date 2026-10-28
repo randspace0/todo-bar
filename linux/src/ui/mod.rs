@@ -1,5 +1,6 @@
 pub mod deadline_editor;
 pub mod glass;
+pub mod google;
 pub mod header;
 pub mod panel;
 pub mod root;

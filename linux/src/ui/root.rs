@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::anim::{Anim, Tween};
 use crate::autostart;
 use crate::cmd::Command;
+use crate::google::{auth::Credentials, sync::SyncState};
 use crate::model::{RepeatRule, TodoItem};
 use crate::reminders::{Reminders, Snapshot};
 use crate::settings::{Edge, SavedRect, Settings, SortMode, Theme, WindowStyle};
@@ -77,6 +78,8 @@ pub enum Overlay {
     Options,
     Deadline(DeadlineState),
     TaskMenu { id: Uuid, pos: Point<Pixels> },
+    /// Google lists to link the current workspace to; None while loading.
+    GoogleLists(Option<Vec<(String, String)>>),
     MoveTo { id: Uuid, pos: Point<Pixels> },
     ConfirmDeleteWorkspace(Uuid),
 }
@@ -135,6 +138,14 @@ pub struct Root {
     pub appear: HashMap<Uuid, Instant>,
     pub list_fade: Option<Instant>,
     pub dbg_row: usize,
+    pub cmd_tx: Sender<Command>,
+    pub google_creds: Option<Credentials>,
+    pub google_connected: bool,
+    pub google_status: String,
+    pub syncing: bool,
+    pub sync_state: SyncState,
+    pub sync_due: Option<Instant>,
+    pub last_sync: Instant,
     pub overlay: Option<Overlay>,
     pub new_deadline: Option<PendingDeadline>,
     pub reorder_active: Option<Uuid>,
@@ -292,12 +303,24 @@ impl Root {
             appear: HashMap::new(),
             list_fade: None,
             dbg_row: 0,
+            google_creds: None,
+            google_connected: false,
+            google_status: String::new(),
+            syncing: false,
+            sync_state: SyncState::load(),
+            sync_due: None,
+            last_sync: Instant::now(),
+            cmd_tx: commands_tx.clone(),
             overlay: None,
             new_deadline: None,
             reorder_active: None,
             last_minute: 0,
         };
         root.mark_rows_known();
+        root.refresh_google();
+        if root.google_connected {
+            root.sync_due = Some(Instant::now() + Duration::from_secs(3));
+        }
         root.sync_background(cx);
         root.start_tick(window, cx);
         window.focus(&root.focus.clone(), cx);
@@ -344,6 +367,7 @@ impl Root {
         if self.needs_sync {
             self.sync_background(cx);
         }
+        self.google_tick(cx);
     }
 
     fn sync_background(&mut self, _cx: &mut Context<Self>) {
@@ -380,6 +404,7 @@ impl Root {
     pub fn edit_store(&mut self, cx: &mut Context<Self>, f: impl FnOnce(&mut Store)) {
         f(&mut self.store);
         self.needs_sync = true;
+        self.schedule_google_sync();
         self.touch();
         cx.notify();
     }
@@ -427,6 +452,7 @@ impl Root {
                 cx.notify();
             }
             Command::Quit => cx.quit(),
+            other => self.handle_google_command(other, cx),
         }
     }
 

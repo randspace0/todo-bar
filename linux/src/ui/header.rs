@@ -207,6 +207,11 @@ impl Root {
                 let pos = self.clamp_menu_pos(pos, 190.0, 190.0);
                 self.task_menu(id, pos, pal, cx)
             }
+            Some(Overlay::GoogleLists(lists)) => {
+                self.overlay = Some(Overlay::GoogleLists(lists.clone()));
+                let pos = self.clamp_menu_pos(point(rect.origin.x + px(10.), rect.origin.y + px(38.)), 220.0, 240.0);
+                self.google_lists_menu(lists, pos, pal, cx)
+            }
             Some(Overlay::MoveTo { id, pos }) => {
                 self.overlay = Some(Overlay::MoveTo { id, pos });
                 let pos = self.clamp_menu_pos(pos, 190.0, 120.0);
@@ -241,6 +246,14 @@ impl Root {
                 cx,
                 move |this, w, cx| this.switch_workspace(id, w, cx),
             ));
+        }
+        if self.google_connected {
+            menu = menu.child(menu_divider(pal));
+            menu = if self.current_list_linked() {
+                menu.child(self.menu_item("ws-gunlink", "Unlink Google Tasks list", None, false, true, pal, cx, |this, _w, cx| this.unlink_list(cx)))
+            } else {
+                menu.child(self.menu_item("ws-glink", "Link to Google Tasks list…", None, false, true, pal, cx, |this, _w, cx| this.open_google_lists(cx)))
+            };
         }
         menu = menu
             .child(menu_divider(pal))
@@ -284,6 +297,29 @@ impl Root {
         }
         let launch = crate::autostart::is_enabled();
         let done = self.store.done_count();
+        menu = menu.child(menu_divider(pal)).child(menu_label("Google Tasks", pal));
+        if self.google_creds.is_none() {
+            menu = menu.child(self.menu_item("g-noid", "Set client ID in settings.json", None, false, false, pal, cx, |_t, _w, _c| {}));
+        } else if !self.google_connected {
+            menu = menu.child(self.menu_item("g-connect", "Connect Google Tasks…", None, false, true, pal, cx, |this, _w, cx| {
+                this.overlay = None;
+                this.google_connect(cx);
+            }));
+        } else {
+            let busy = self.syncing;
+            menu = menu
+                .child(self.menu_item("g-sync", "Sync now", None, false, !busy, pal, cx, |this, _w, cx| {
+                    this.overlay = None;
+                    this.sync_now(cx);
+                }))
+                .child(self.menu_item("g-disconnect", "Disconnect Google Tasks", None, false, true, pal, cx, |this, _w, cx| {
+                    this.overlay = None;
+                    this.google_disconnect(cx);
+                }));
+        }
+        if !self.google_status.is_empty() {
+            menu = menu.child(div().px(px(8.)).py(px(2.)).max_w(px(190.)).text_size(px(10.5)).text_color(pal.tertiary).child(self.google_status.clone()));
+        }
         menu = menu
             .child(menu_divider(pal))
             .child(self.menu_item("opt-rem", "Deadline Reminders", None, self.settings.reminders_enabled, true, pal, cx, |this, _w, cx| {
@@ -306,6 +342,29 @@ impl Root {
             }))
             .child(menu_divider(pal))
             .child(self.menu_item("opt-quit", "Quit TodoBar", Some("Ctrl+Q".into()), false, true, pal, cx, |_this, _w, cx| cx.quit()));
+        Self::abs_at(pos).child(menu).into_any_element()
+    }
+
+    fn google_lists_menu(&mut self, lists: Option<Vec<(String, String)>>, pos: Point<Pixels>, pal: Palette, cx: &mut Context<Self>) -> AnyElement {
+        let name = self.store.current_workspace().name.clone();
+        let mut menu = menu_box(pal)
+            .id("google-lists")
+            .max_h(self.canvas.height - pos.y - px(8.))
+            .overflow_y_scroll()
+            .child(menu_label(&format!("Sync “{name}” with…"), pal));
+        match lists {
+            None => menu = menu.child(self.menu_item("gl-loading", "Loading…", None, false, false, pal, cx, |_t, _w, _c| {})),
+            Some(lists) => {
+                for (i, (id, title)) in lists.into_iter().enumerate() {
+                    menu = menu.child(self.menu_item(format!("gl-{i}"), title, None, false, true, pal, cx, move |this, _w, cx| {
+                        this.link_existing_list(id.clone(), cx)
+                    }));
+                }
+                menu = menu.child(menu_divider(pal)).child(self.menu_item("gl-new", format!("New list “{name}”"), None, false, true, pal, cx, |this, _w, cx| {
+                    this.link_new_list(cx)
+                }));
+            }
+        }
         Self::abs_at(pos).child(menu).into_any_element()
     }
 

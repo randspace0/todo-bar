@@ -143,6 +143,11 @@ pub struct TodoItem {
     pub completed_at: Option<DateTime<Utc>>,
     #[serde(rename = "workspaceID", default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<Uuid>,
+    /// Google Tasks id once linked, and the content hash both sides had at the last sync.
+    #[serde(rename = "googleID", default, skip_serializing_if = "Option::is_none")]
+    pub google_id: Option<String>,
+    #[serde(rename = "googleHash", default, skip_serializing_if = "Option::is_none")]
+    pub google_hash: Option<u64>,
 }
 
 impl TodoItem {
@@ -159,6 +164,8 @@ impl TodoItem {
             notes: None,
             completed_at: None,
             workspace_id: None,
+            google_id: None,
+            google_hash: None,
         }
     }
 
@@ -184,6 +191,15 @@ impl TodoItem {
 pub struct Workspace {
     pub id: Uuid,
     pub name: String,
+    /// Google Tasks list this workspace syncs with, if linked.
+    #[serde(rename = "googleListID", default, skip_serializing_if = "Option::is_none")]
+    pub google_list_id: Option<String>,
+}
+
+impl Workspace {
+    pub fn new(name: &str) -> Self {
+        Self { id: Uuid::new_v4(), name: name.to_string(), google_list_id: None }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

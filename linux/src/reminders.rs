@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn timed_gives_two_dateonly_gives_nine_am() {
-        let ws = vec![Workspace { id: Uuid::new_v4(), name: "Todo".into() }];
+        let ws = vec![Workspace::new("Todo")];
         let day = NaiveDate::from_ymd_opt(2030, 5, 1).unwrap();
         let mut timed = TodoItem::new("a".into());
         timed.deadline = Some(local_at(day, 14, 0));

@@ -129,3 +129,24 @@ Differences from macOS:
 - Launching `todobar` again while it is running just shows the existing panel.
 - Data: `~/.local/share/TodoBar/tasks.json` and `workspaces.json` (copy them from macOS to migrate);
   settings: `~/.config/TodoBar/settings.json`; login item: `~/.config/autostart/todobar.desktop`.
+
+### Google Tasks sync (Linux)
+
+Two-way sync between a workspace and a Google Tasks list: title, notes, done state and due date
+(Google keeps the date only, so a task's time of day stays local). Repeat rules are local-only.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) enable the **Google Tasks API** and
+   create an **OAuth client ID of type Desktop app**.
+2. Give TodoBar the client ID/secret, either in `~/.config/TodoBar/settings.json`
+   (`"google_client_id"`, `"google_client_secret"`) or as env vars `TODOBAR_GOOGLE_CLIENT_ID` /
+   `TODOBAR_GOOGLE_CLIENT_SECRET` (env wins).
+3. `…` → **Connect Google Tasks…** and approve in the browser (loopback redirect + PKCE; only a
+   refresh token is stored, in `~/.config/TodoBar/google.json`, mode 0600).
+4. Workspace name menu → **Link to Google Tasks list…** and pick a list or create one.
+
+It syncs on link, ~5 s after you edit, every 5 minutes, and via `…` → **Sync now**. Deleting on
+either side deletes on the other. If a task changed on both sides, the local edit wins; a task
+edited locally but deleted on Google is re-created. Moving a task to another workspace re-creates
+it in that workspace's list. Sync changes aren't undoable. While your OAuth app is in "Testing",
+Google expires refresh tokens after 7 days; publish it (or reconnect) to avoid that.
+

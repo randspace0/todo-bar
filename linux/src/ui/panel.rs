@@ -290,6 +290,9 @@ impl Root {
             .py(px(6.))
             .child(div().text_size(px(11.)).text_color(pal.secondary).child(summary))
             .child(div().flex_1())
+            .when(self.current_list_linked() && !self.google_status.is_empty(), |d| {
+                d.child(div().text_size(px(10.)).text_color(pal.tertiary).truncate().child(format!("Google · {}", self.google_status)))
+            })
             .when(done > 0, |d| {
                 d.child(
                     div()
