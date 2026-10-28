@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=TodoBar
+GenericName=Todo List
+Comment=A tiny always-on-top todo list
+Exec=todobar
+Icon=todobar
+Type=Application
+Categories=Utility;
+Keywords=todo;tasks;reminders;
+StartupNotify=false

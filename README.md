@@ -1,6 +1,7 @@
 # TodoBar
 
 A tiny always-on-top todo list for macOS (14+). SwiftUI + AppKit, no dependencies.
+A Linux (Wayland) port lives in [`linux/`](#linux) — see below.
 
 ## Build & install
 
@@ -97,3 +98,34 @@ Shortcuts work while the TodoBar panel is focused (the last thing you clicked).
 
 Tasks are stored in `~/Library/Application Support/TodoBar/tasks.json`, workspaces in
 `workspaces.json` next to it.
+
+## Linux
+
+The `linux/` directory is a Rust + [GPUI](https://gpui.rs) port with the same features
+(workspaces, deadlines, repeats, reminders, undo/redo, drag reorder, collapse-to-edge tab,
+fade when idle, Liquid Glass / Standard style, tray icon, launch at login) and the same JSON
+data format.
+
+**Requirements**
+
+- A Wayland compositor with `wlr-layer-shell`: COSMIC, Sway, Hyprland, KDE Plasma. This is what
+  makes the panel always-on-top and lets it sit anywhere on screen. On GNOME (no layer-shell) it
+  falls back to a normal window: no always-on-top, and it can't be placed or docked by the app.
+- Rust (https://rustup.rs) and build packages:
+  `sudo apt install libxkbcommon-dev libwayland-dev libfontconfig-dev libdbus-1-dev pkg-config clang`
+- A StatusNotifier tray host for the tray icon (built in on COSMIC/KDE; GNOME needs the AppIndicator extension).
+
+```sh
+./linux/install.sh              # builds, installs to ~/.local, adds a launcher entry
+./linux/install.sh --uninstall
+```
+
+Differences from macOS:
+
+- **Ctrl** replaces ⌘ in every shortcut (`Ctrl+N`, `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+1…9`, `Ctrl+Shift+N`, `Ctrl+Q`).
+- The glass look is drawn (translucent fill, sheen, rim), not a real blur — Wayland has no portable
+  blur-behind, so the fill is a bit more opaque than on macOS.
+- Reminders are desktop notifications (freedesktop); clicking one opens the task.
+- Launching `todobar` again while it is running just shows the existing panel.
+- Data: `~/.local/share/TodoBar/tasks.json` and `workspaces.json` (copy them from macOS to migrate);
+  settings: `~/.config/TodoBar/settings.json`; login item: `~/.config/autostart/todobar.desktop`.
