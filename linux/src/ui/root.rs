@@ -1014,6 +1014,7 @@ mod smoke {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    #[cfg(debug_assertions)]
     fn setup(cx: &mut TestAppContext, tag: &str) -> (gpui::WindowHandle<Root>, std::path::PathBuf) {
         let dir = std::env::temp_dir().join(format!("todobar-{tag}-{}", std::process::id()));
         std::env::set_var("XDG_DATA_HOME", &dir);
@@ -1029,6 +1030,7 @@ mod smoke {
         (window, dir)
     }
 
+    #[cfg(debug_assertions)]
     fn click(cx: &mut VisualTestContext, selector: &'static str) {
         let b = cx.debug_bounds(selector).unwrap_or_else(|| panic!("no element {selector}"));
         let c = b.center();
@@ -1036,6 +1038,8 @@ mod smoke {
         cx.simulate_click(c, gpui::Modifiers::none());
     }
 
+    // Looks elements up by debug selector, which gpui only records in debug builds.
+    #[cfg(debug_assertions)]
     #[gpui::test]
     fn reorder_by_mouse_drag(cx: &mut TestAppContext) {
         let (window, dir) = setup(cx, "reorder");
@@ -1064,6 +1068,8 @@ mod smoke {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // Looks elements up by debug selector, which gpui only records in debug builds.
+    #[cfg(debug_assertions)]
     #[gpui::test]
     fn menus_by_click(cx: &mut TestAppContext) {
         let (window, dir) = setup(cx, "menus");
@@ -1083,6 +1089,8 @@ mod smoke {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    // Looks elements up by debug selector, which gpui only records in debug builds.
+    #[cfg(debug_assertions)]
     #[gpui::test]
     fn deadline_popover(cx: &mut TestAppContext) {
         let (window, dir) = setup(cx, "deadline");

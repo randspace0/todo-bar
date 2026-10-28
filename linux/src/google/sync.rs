@@ -258,7 +258,6 @@ mod tests {
 
     // End-to-end against an in-process fake of the Tasks REST API.
     mod mock {
-        use super::*;
         use serde_json::{json, Value};
         use std::io::{Read, Write};
         use std::net::TcpListener;
