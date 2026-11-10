@@ -1,6 +1,7 @@
 # TodoBar
 
 A tiny always-on-top todo list for macOS (14+). SwiftUI + AppKit, no dependencies.
+A Linux (Wayland) port lives in [`linux/`](#linux) — see below.
 
 ## Build & install
 
@@ -97,3 +98,55 @@ Shortcuts work while the TodoBar panel is focused (the last thing you clicked).
 
 Tasks are stored in `~/Library/Application Support/TodoBar/tasks.json`, workspaces in
 `workspaces.json` next to it.
+
+## Linux
+
+The `linux/` directory is a Rust + [GPUI](https://gpui.rs) port with the same features
+(workspaces, deadlines, repeats, reminders, undo/redo, drag reorder, collapse-to-edge tab,
+fade when idle, Liquid Glass / Standard style, tray icon, launch at login) and the same JSON
+data format.
+
+**Requirements**
+
+- A Wayland compositor with `wlr-layer-shell`: COSMIC, Sway, Hyprland, KDE Plasma. This is what
+  makes the panel always-on-top and lets it sit anywhere on screen. On GNOME (no layer-shell) it
+  falls back to a normal window: no always-on-top, and it can't be placed or docked by the app.
+- Rust (https://rustup.rs) and build packages:
+  `sudo apt install libxkbcommon-dev libwayland-dev libfontconfig-dev libdbus-1-dev pkg-config clang`
+- A StatusNotifier tray host for the tray icon (built in on COSMIC/KDE; GNOME needs the AppIndicator extension).
+
+```sh
+./linux/install.sh              # builds, installs to ~/.local, adds a launcher entry
+./linux/install.sh --uninstall
+```
+
+Differences from macOS:
+
+- **Ctrl** replaces ⌘ in every shortcut (`Ctrl+N`, `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+1…9`, `Ctrl+Shift+N`, `Ctrl+Q`).
+- The glass look is drawn (translucent fill, sheen, rim), not a real blur — Wayland has no portable
+  blur-behind, so the fill is a bit more opaque than on macOS.
+- Reminders are desktop notifications (freedesktop); clicking one opens the task.
+- Launching `todobar` again while it is running just shows the existing panel.
+- Data: `~/.local/share/TodoBar/tasks.json` and `workspaces.json` (copy them from macOS to migrate);
+  settings: `~/.config/TodoBar/settings.json`; login item: `~/.config/autostart/todobar.desktop`.
+
+### Google Tasks sync (Linux)
+
+Two-way sync between a workspace and a Google Tasks list: title, notes, done state and due date
+(Google keeps the date only, so a task's time of day stays local). Repeat rules are local-only.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) enable the **Google Tasks API** and
+   create an **OAuth client ID of type Desktop app**.
+2. Give TodoBar the client ID/secret, either in `~/.config/TodoBar/settings.json`
+   (`"google_client_id"`, `"google_client_secret"`) or as env vars `TODOBAR_GOOGLE_CLIENT_ID` /
+   `TODOBAR_GOOGLE_CLIENT_SECRET` (env wins).
+3. `…` → **Connect Google Tasks…** and approve in the browser (loopback redirect + PKCE; only a
+   refresh token is stored, in `~/.config/TodoBar/google.json`, mode 0600).
+4. Workspace name menu → **Link to Google Tasks list…** and pick a list or create one.
+
+It syncs on link, ~5 s after you edit, every 5 minutes, and via `…` → **Sync now**. Deleting on
+either side deletes on the other. If a task changed on both sides, the local edit wins; a task
+edited locally but deleted on Google is re-created. Moving a task to another workspace re-creates
+it in that workspace's list. Sync changes aren't undoable. While your OAuth app is in "Testing",
+Google expires refresh tokens after 7 days; publish it (or reconnect) to avoid that.
+
